@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional
 
 import pandas as pd
 import requests
@@ -34,7 +34,7 @@ def openai_vlm_options():
             "Content-Type": "application/json"
         },
         params=dict(
-            model="gpt-4-vision-preview",
+            model="gpt-4o-mini",
             max_tokens=300,
         ),
         prompt="Describe the image in detail, including any text, objects, and layout. Be accurate and thorough.",
@@ -80,17 +80,12 @@ def process_document(
     end_time = time.time() - start_time
     _log.info(f"Document processed in {end_time:.2f} seconds")
 
-    # Create mappings for tables and images
-    table_mapping: Dict[str, str] = {}
-    image_mapping: Dict[str, Dict[str, str]] = {}
-
-    # Export tables to CSV and create mapping
+    # Export tables to CSV
     for table_ix, table in enumerate(result.document.tables):
         table_df = table.export_to_dataframe()
         csv_path = output_dir / f"{doc_filename}-table-{table_ix + 1}.csv"
         _log.info(f"Saving table {table_ix + 1} to {csv_path}")
         table_df.to_csv(csv_path)
-        table_mapping[table.self_ref] = f"{doc_filename}-table-{table_ix + 1}.csv"
 
     # Export images and get VLM analysis
     picture_counter = 0
@@ -102,40 +97,38 @@ def process_document(
             with img_path.open("wb") as fp:
                 element.get_image(result.document).save(fp, "PNG")
             
-            # Get VLM analysis
+            # Get VLM analysis if available
             if element.annotations:
-                description = element.annotations[0].text if element.annotations else "No description available"
-                _log.info(f"Image {element.self_ref} analysis: {description}")
-            else:
-                description = "No description available"
-            
-            image_mapping[element.self_ref] = {
-                "path": f"{doc_filename}-picture-{picture_counter}.png",
-                "description": description
-            }
+                _log.info(f"Image {element.self_ref} analysis: {element.annotations}")
 
-    # Export comprehensive markdown with content in correct positions
+    # Export comprehensive markdown
     markdown_path = output_dir / f"{doc_filename}.md"
     with markdown_path.open("w") as f:
         # Write document metadata
         f.write(f"# {doc_filename}\n\n")
         f.write(f"Processing time: {end_time:.2f} seconds\n\n")
         
-        # Process document content and replace placeholders
-        content = result.document.export_to_markdown()
+        # Write document content
+        f.write(result.document.export_to_markdown())
         
-        # Replace table placeholders with actual table content
-        for table_ref, csv_path in table_mapping.items():
-            table_df = pd.read_csv(output_dir / csv_path)
-            table_md = table_df.to_markdown(index=False)
-            content = content.replace(f"<!-- table {table_ref} -->", table_md)
+        # Add table references
+        if result.document.tables:
+            f.write("\n## Tables\n\n")
+            for table_ix, table in enumerate(result.document.tables):
+                f.write(f"### Table {table_ix + 1}\n\n")
+                f.write(f"See CSV file: {doc_filename}-table-{table_ix + 1}.csv\n\n")
         
-        # Replace image placeholders with actual images and descriptions
-        for img_ref, img_data in image_mapping.items():
-            img_markdown = f"![{img_ref}]({img_data['path']})\n\n**Description:** {img_data['description']}\n\n"
-            content = content.replace(f"<!-- image {img_ref} -->", img_markdown)
-        
-        f.write(content)
+        # Add image references and analysis
+        f.write("\n## Images\n\n")
+        picture_counter = 0
+        for element, _level in result.document.iterate_items():
+            if isinstance(element, PictureItem):
+                picture_counter += 1
+                f.write(f"### {element.self_ref}\n\n")
+                f.write(f"![{element.self_ref}]({doc_filename}-picture-{picture_counter}.png)\n\n")
+                if element.annotations:
+                    f.write("**VLM Analysis:**\n\n")
+                    f.write(f"{element.annotations}\n\n")
 
 def main():
     logging.basicConfig(level=logging.INFO)

@@ -48,8 +48,11 @@ def process_document(
     enable_remote_services: bool = True,
 ) -> None:
     """Process a document with comprehensive extraction and analysis."""
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Create output directory with filename_output format
     doc_filename = input_path.stem
+    doc_extension = input_path.suffix
+    specific_output_dir = output_dir / f"{doc_filename}_output{doc_extension}"
+    specific_output_dir.mkdir(parents=True, exist_ok=True)
 
     # Configure pipeline options
     pipeline_options = PdfPipelineOptions(
@@ -83,7 +86,7 @@ def process_document(
     # Export tables to CSV
     for table_ix, table in enumerate(result.document.tables):
         table_df = table.export_to_dataframe()
-        csv_path = output_dir / f"{doc_filename}-table-{table_ix + 1}.csv"
+        csv_path = specific_output_dir / f"{doc_filename}-table-{table_ix + 1}.csv"
         _log.info(f"Saving table {table_ix + 1} to {csv_path}")
         table_df.to_csv(csv_path)
 
@@ -93,7 +96,7 @@ def process_document(
         if isinstance(element, PictureItem):
             picture_counter += 1
             # Save image using get_image() method
-            img_path = output_dir / f"{doc_filename}-picture-{picture_counter}.png"
+            img_path = specific_output_dir / f"{doc_filename}-picture-{picture_counter}.png"
             with img_path.open("wb") as fp:
                 element.get_image(result.document).save(fp, "PNG")
             
@@ -102,7 +105,7 @@ def process_document(
                 _log.info(f"Image {element.self_ref} analysis: {element.annotations}")
 
     # Export comprehensive markdown
-    markdown_path = output_dir / f"{doc_filename}.md"
+    markdown_path = specific_output_dir / f"{doc_filename}.md"
     with markdown_path.open("w") as f:
         # Write document metadata
         f.write(f"# {doc_filename}\n\n")

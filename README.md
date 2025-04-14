@@ -72,6 +72,39 @@ output/
    - Generates comprehensive markdown file
    - Links all components together in the markdown
 
+## Data Extraction Flow
+
+```mermaid
+graph TD
+    A[Input PDF Document] --> B[Document Processing]
+    B --> C[Table Extraction]
+    B --> D[Image Extraction]
+    B --> E[OCR Processing]
+    
+    C --> F[Table Structure Analysis]
+    F --> G[Cell Matching]
+    G --> H[CSV Export]
+    
+    D --> I[Image Analysis]
+    I --> J[VLM Description]
+    J --> K[PNG Export]
+    
+    E --> L[Text Extraction]
+    L --> M[Content Structuring]
+    
+    H --> N[Markdown Generation]
+    K --> N
+    M --> N
+    
+    N --> O[Final Output]
+    
+    subgraph "Output Files"
+        O --> P[CSV Files]
+        O --> Q[PNG Files]
+        O --> R[Markdown File]
+    end
+```
+
 ## Usage
 
 ```python
